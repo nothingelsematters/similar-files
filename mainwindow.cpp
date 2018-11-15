@@ -13,12 +13,8 @@
 #include <QFlag>
 
 #include <map>
+#include <ctime>
 
-// TODO: links
-// TODO: file reading exceptions
-// TODO: great-reformating
-// TODO: show adequate file names in front
-// TODO: Column number hard code -> Enum
 
 main_window::main_window(QWidget *parent)
     : QMainWindow(parent),
@@ -26,13 +22,6 @@ main_window::main_window(QWidget *parent)
     ui->setupUi(this);
     setGeometry(QStyle::alignedRect(Qt::LeftToRight, Qt::AlignCenter, size(), qApp->desktop()->availableGeometry()));
 
-    ui->rightTableWidget->setColumnCount(2);
-    ui->rightTableWidget->setHorizontalHeaderLabels({"Files", "Delete"});
-    ui->rightTableWidget->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    ui->rightTableWidget->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Interactive);
-
-    ui->leftTableWidget->setColumnCount(1);
-    ui->leftTableWidget->setHorizontalHeaderLabels({"Diretories"});
     ui->leftTableWidget->horizontalHeader()->setStretchLastSection(true);
 
     QCommonStyle style;
@@ -69,7 +58,7 @@ void main_window::notification(const char* message,
 
 void main_window::file_trouble_message(const char* message, std::list<QString> const& troubled) {
     QMessageBox* msgBox = new QMessageBox(QMessageBox::Warning, QString("Troubled ") + message,
-    QString(QString::number(troubled.size())) + " file(s) troubled reading",
+    QString(QString::number(troubled.size())) + " file(s) troubled " + message,
     QMessageBox::StandardButtons({QMessageBox::Ok}),
     this);
     QPushButton* show = msgBox->addButton("Show troubled files", QMessageBox::ButtonRole::AcceptRole);
@@ -95,7 +84,7 @@ void main_window::select_directory() {
 
 void main_window::add_directory(QString const& dir) {
     for (auto i = directories.begin(); i != directories.end(); ++i) {
-        if (*i == dir || dir.indexOf(*i) == 0) {
+        if (*i == dir || dir.indexOf(*i + '/') == 0) {
             notification("This directory is already on the list");
             return;
         }
@@ -121,19 +110,18 @@ void main_window::add_directory(QString const& dir) {
 void main_window::remove_directories_from_list() {
     QList<QTableWidgetItem*> directory_list = ui->leftTableWidget->selectedItems();
     for (auto i: directory_list) {
+        directories.erase(std::find(directories.begin(), directories.end(), i->text()));
         ui->leftTableWidget->removeRow(i->row());
     }
 }
 
-void main_window::file_remove_dispatcher(int state) {
-    QObject* check_box = sender();
-    int row = check_box->property("row").toInt();
+void main_window::file_remove_dispatcher(QTreeWidgetItem* check_box) {
+    QString file_name = check_box->text(0);
 
-    QString file_name = ui->rightTableWidget->item(row, 0)->text();
-    if (state == Qt::Checked) {
-        files_to_remove.emplace(file_name, row);
+    if (check_box->checkState(0) == Qt::Checked) {
+        files_to_remove.emplace(file_name, check_box);
     } else {
-        files_to_remove.erase(files_to_remove.find({file_name, row}));
+        files_to_remove.erase(files_to_remove.find({file_name, check_box}));
     }
 }
 
@@ -148,33 +136,6 @@ QString main_window::get_hash(QString const& file_name) {
     return nullptr;
 }
 
-bool main_window::compare_files(QString const& first_name, QString const& second_name) {
-    QFile first_file(first_name);
-    QFile second_file(second_name);
-    first_file.open(QFile::ReadOnly);
-    second_file.open(QFile::ReadOnly);
-    char* first_buffer = new char[1000];
-    char* second_buffer = new char[1000];
-
-    while (true) {
-        qint64 count = first_file.read(first_buffer, 1000);
-        //troubled reading
-        if (count == -1 || count == 0) {
-            break;
-        }
-        if (second_file.read(second_buffer, 1000) != count) {
-            return false;
-        }
-        for (size_t i = 0; i < count; ++i) {
-            if (first_buffer[i] != second_buffer[i]) {
-                return false;
-            }
-        }
-    }
-    return second_file.bytesAvailable() == 0;
-    // QFile destructor closes files
-}
-
 void main_window::scan_directories() {
     if (directories.empty()) {
         notification("Please, choose directories to scan");
@@ -183,19 +144,18 @@ void main_window::scan_directories() {
 
     files_to_remove.clear();
     ui->leftTableWidget->setRowCount(0);
-    ui->rightTableWidget->setRowCount(0);
+    ui->rightTreeWidget->clear();
+    std::map<QString, size_t> sizes;
     std::map<QString, std::list<std::list<QString>>> hashes;
     std::list<QString> troubled;
 
-
     while (!directories.empty()) {
         QDir d(directories.front());
+        QFlags<QDir::Filter> flags({QDir::NoDotAndDotDot, QDir::Dirs, QDir::Files}); // TODO: add hidden
+        d.setFilter(flags);
         QFileInfoList list = d.entryInfoList();
 
         for (QFileInfo file_info: list) {
-            if (file_info.fileName() == "." || file_info.fileName() == "..") {
-                continue;
-            }
             QString path = file_info.absoluteFilePath();
 
             if (file_info.isDir()) {
@@ -209,55 +169,60 @@ void main_window::scan_directories() {
 
                 QString current_hash = get_hash(path);
                 bool add_new_file = true;
+
                 if (hashes[current_hash].size() != 0) {
-                    for (auto& i: hashes[current_hash]) {
-                        if (compare_files(i.front(), path)) {
-                            i.push_back(path);
+                    for (auto i = hashes[current_hash].begin();
+                            i != hashes[current_hash].end() && add_new_file; ++i) {
+
+                        if (sizes[i->front()] == current_file.size()) {
+                            i->push_back(path);
                             add_new_file = false;
-                            break;
                         }
                     }
                 }
 
                 if (add_new_file) {
                     hashes[current_hash].push_back(std::list<QString>({path}));
+                    sizes[path] = current_file.size();
                 }
             }
         }
         directories.pop_front();
     }
-
-
-    // TO FIX front part:
     bool not_found = true;
-    bool is_grey = true;
 
     for (auto i: hashes) {
         for (auto j: i.second) {
             if (j.size() > 1) {
                 not_found = false;
-                is_grey = !is_grey;
+
+                // TODO: remove copy paste
+
+                QTreeWidgetItem* parent = new QTreeWidgetItem();
+                QString item_string = (QFileInfo(*(j.begin())).isSymLink() ? "Symbolic: " : "") + *(j.begin());
+                parent->setText(0, item_string);
+                ui->rightTreeWidget->insertTopLevelItem(0, parent);
 
                 for (auto k: j) {
-                    ui->rightTableWidget->insertRow(ui->rightTableWidget->rowCount());
-                    QTableWidgetItem* item = new QTableWidgetItem(k);
-                    item->setBackground(QBrush(is_grey ? QColor(200, 200, 200) : QColor(255, 255, 255)));
-                    ui->rightTableWidget->setItem(ui->rightTableWidget->rowCount() - 1, 0, item);
+                    QString item_string = (QFileInfo(k).isSymLink() ? "Symbolic: " : "") + k;
+                    QTreeWidgetItem* item = new QTreeWidgetItem();
+                    item->setText(0, item_string);
+                    item->setFlags(item->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsSelectable);
+                    item->setCheckState(0, Qt::Unchecked);
 
-                    QCheckBox* check_box = new QCheckBox();
-                    check_box->setProperty("row", ui->rightTableWidget->rowCount() - 1);
-                    ui->rightTableWidget->setCellWidget(ui->rightTableWidget->rowCount() - 1, 1, check_box);
-                    connect(check_box, SIGNAL(stateChanged(int)), this, SLOT(file_remove_dispatcher(int)));
+                    parent->insertChild(0, item);
+                    connect(ui->rightTreeWidget, SIGNAL(itemChanged(QTreeWidgetItem*, int)),
+                        this, SLOT(file_remove_dispatcher(QTreeWidgetItem*)));
                 }
             }
         }
     }
-
     if (troubled.size() > 0) {
-        file_trouble_message("Reading", troubled);
+        file_trouble_message("reading", troubled);
     } else if (not_found) {
         notification("Similar Files Not Found");
     }
+
 }
 
 void main_window::remove_files() {
@@ -277,23 +242,23 @@ void main_window::remove_files() {
 
         for (auto i = files_to_remove.begin(); i != files_to_remove.end(); ) {
             QFile file(i->first);
-            if (!file.permissions().testFlag(QFileDevice::WriteUser)) {
+
+            if (!file.permissions().testFlag(QFileDevice::WriteUser) || !file.remove()) {
+                i->second->setForeground(0, QBrush(QColor(200, 0, 0)));
                 troubled.push_back(i->first);
                 ++i;
             } else {
-                file.remove();
-                QTableWidgetItem* item = ui->rightTableWidget->item(i->second, 0);
-                QFont font = item->font();
-                font.setStrikeOut(true);
-                item->setFont(font);
-
-                ui->rightTableWidget->removeCellWidget(i->second, 1);
+                QTreeWidgetItem* parent_item = i->second->parent();
+                parent_item->removeChild(i->second);
+                if (parent_item->childCount() == 0) {
+                    ui->rightTreeWidget->invisibleRootItem()->removeChild(parent_item);
+                }
                 i = files_to_remove.erase(i);
             }
         }
 
         if (troubled.size() > 0) {
-            file_trouble_message("Deleting", troubled);
+            file_trouble_message("deleting", troubled);
         }
     }
 

@@ -32,13 +32,26 @@
       <attribute name="headerStretchLastSection">
        <bool>true</bool>
       </attribute>
+      <column>
+       <property name="text">
+        <string>Directories</string>
+       </property>
+      </column>
      </widget>
     </item>
     <item>
-     <widget class="QTableWidget" name="rightTableWidget">
+     <widget class="QTreeWidget" name="rightTreeWidget">
+      <attribute name="headerMinimumSectionSize">
+       <number>100</number>
+      </attribute>
       <attribute name="headerStretchLastSection">
        <bool>true</bool>
       </attribute>
+      <column>
+       <property name="text">
+        <string>Similar Files</string>
+       </property>
+      </column>
      </widget>
     </item>
    </layout>
