@@ -13,7 +13,6 @@
 #include <QFlag>
 
 #include <map>
-#include <ctime>
 
 
 main_window::main_window(QWidget *parent)
@@ -41,6 +40,14 @@ main_window::main_window(QWidget *parent)
 }
 
 main_window::~main_window() {}
+
+std::map<parameters, bool> main_window::get_parameters() {
+    std::map<parameters, bool> result;
+    result[parameters::Hidden] = ui->paramsBar->findChild<QCheckBox*>("hidden")->checkState();
+    result[parameters::Recursive] = ui->paramsBar->findChild<QCheckBox*>("recursive")->checkState();
+
+    return std::move(result);
+}
 
 void main_window::notification(const char* message,
         const char* window_title = "Notification", int time = 2000) {
@@ -76,32 +83,29 @@ void main_window::file_trouble_message(const char* message, std::list<QString> c
 
 void main_window::select_directory() {
     QString dir = QFileDialog::getExistingDirectory(this, "Select Directory for Scanning",
-                                                    QString(), QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+        QString(), QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
     if (dir != nullptr) {
         add_directory(dir);
     }
 }
 
 void main_window::add_directory(QString const& dir) {
-    for (auto i = directories.begin(); i != directories.end(); ++i) {
-        if (*i == dir || dir.indexOf(*i + '/') == 0) {
+    for (int i = 0; i < ui->leftTableWidget->rowCount(); ++i) {
+        auto widget = ui->leftTableWidget->item(i, 0);
+        if (widget->text() == dir || dir.indexOf(widget->text() + '/') == 0) {
             notification("This directory is already on the list");
             return;
         }
 
-        if ((*i).indexOf(dir) == 0) {
-            for (auto j: ui->leftTableWidget->findItems(dir, Qt::MatchStartsWith)) {
-                ui->leftTableWidget->removeRow(j->row());
+        if (widget->text().indexOf(dir) == 0) {
+            for (auto k: ui->leftTableWidget->findItems(dir, Qt::MatchStartsWith)) {
+                ui->leftTableWidget->removeRow(k->row());
             }
-            directories.remove_if([&dir] (QString const& d) {
-                return (d.indexOf(dir) == 0);
-            });
             notification("Subdirectories were replaced with the directory chosen");
             break;
         }
     }
 
-    directories.push_back(dir);
     QTableWidgetItem* item = new QTableWidgetItem(dir);
     ui->leftTableWidget->insertRow(ui->leftTableWidget->rowCount());
     ui->leftTableWidget->setItem(ui->leftTableWidget->rowCount() - 1, 0, item);
@@ -110,7 +114,6 @@ void main_window::add_directory(QString const& dir) {
 void main_window::remove_directories_from_list() {
     QList<QTableWidgetItem*> directory_list = ui->leftTableWidget->selectedItems();
     for (auto i: directory_list) {
-        directories.erase(std::find(directories.begin(), directories.end(), i->text()));
         ui->leftTableWidget->removeRow(i->row());
     }
 }
@@ -120,7 +123,7 @@ void main_window::file_remove_dispatcher(QTreeWidgetItem* check_box) {
 
     if (check_box->checkState(0) == Qt::Checked) {
         files_to_remove.emplace(file_name, check_box);
-    } else {
+    } else if (files_to_remove.find({file_name, check_box}) != files_to_remove.end()) {
         files_to_remove.erase(files_to_remove.find({file_name, check_box}));
     }
 }
@@ -137,6 +140,11 @@ QString main_window::get_hash(QString const& file_name) {
 }
 
 void main_window::scan_directories() {
+    std::list<QString> directories;
+    for (int i = 0; i < ui->leftTableWidget->rowCount(); ++i) {
+        directories.push_back(ui->leftTableWidget->item(i, 0)->text());
+    }
+
     if (directories.empty()) {
         notification("Please, choose directories to scan");
         return;
@@ -145,21 +153,30 @@ void main_window::scan_directories() {
     files_to_remove.clear();
     ui->leftTableWidget->setRowCount(0);
     ui->rightTreeWidget->clear();
-    std::map<QString, size_t> sizes;
-    std::map<QString, std::list<std::list<QString>>> hashes;
+
+    auto params = get_parameters();
+    bool recursive = params[parameters::Recursive];
+    std::map<QString, std::list<QString>> hashes;
+    std::map<size_t, std::pair<QString, bool>> sizes;
     std::list<QString> troubled;
 
     while (!directories.empty()) {
         QDir d(directories.front());
-        QFlags<QDir::Filter> flags({QDir::NoDotAndDotDot, QDir::Dirs, QDir::Files}); // TODO: add hidden
+        QFlags<QDir::Filter> flags({QDir::NoDotAndDotDot, QDir::Dirs, QDir::Files});
+        if (params[parameters::Hidden]) {
+            flags |= QDir::Hidden;
+        }
         d.setFilter(flags);
+
         QFileInfoList list = d.entryInfoList();
 
         for (QFileInfo file_info: list) {
             QString path = file_info.absoluteFilePath();
 
             if (file_info.isDir()) {
-                directories.push_back(path);
+                if (recursive) {
+                    directories.push_back(path);
+                }
             } else {
                 QFile current_file(path);
                 if (!current_file.permissions().testFlag(QFileDevice::ReadUser)) {
@@ -167,56 +184,48 @@ void main_window::scan_directories() {
                     continue;
                 }
 
-                QString current_hash = get_hash(path);
-                bool add_new_file = true;
+                if (sizes.find(current_file.size()) == sizes.end()) {
+                    sizes[current_file.size()] = {path, false};
+                } else {
+                    QString current_hash = get_hash(path);
+                    hashes[current_hash].push_back(path);
 
-                if (hashes[current_hash].size() != 0) {
-                    for (auto i = hashes[current_hash].begin();
-                            i != hashes[current_hash].end() && add_new_file; ++i) {
-
-                        if (sizes[i->front()] == current_file.size()) {
-                            i->push_back(path);
-                            add_new_file = false;
-                        }
+                    if (!sizes[current_file.size()].second) {
+                        QString current_hash = get_hash(sizes[current_file.size()].first);
+                        hashes[current_hash].push_back(sizes[current_file.size()].first);
+                        sizes[current_file.size()].second = true;
                     }
-                }
-
-                if (add_new_file) {
-                    hashes[current_hash].push_back(std::list<QString>({path}));
-                    sizes[path] = current_file.size();
                 }
             }
         }
         directories.pop_front();
     }
+
     bool not_found = true;
-
     for (auto i: hashes) {
-        for (auto j: i.second) {
-            if (j.size() > 1) {
-                not_found = false;
+        if (i.second.size() > 1) {
+            not_found = false;
 
-                // TODO: remove copy paste
+            QTreeWidgetItem* parent = new QTreeWidgetItem();
+            QString item_string = (QFileInfo(*(i.second.begin())).isSymLink() ? "Symbolic: " : "") +
+                (*i.second.begin()).splitRef("/").back();
+            parent->setText(0, item_string);
+            ui->rightTreeWidget->insertTopLevelItem(0, parent);
 
-                QTreeWidgetItem* parent = new QTreeWidgetItem();
-                QString item_string = (QFileInfo(*(j.begin())).isSymLink() ? "Symbolic: " : "") + *(j.begin());
-                parent->setText(0, item_string);
-                ui->rightTreeWidget->insertTopLevelItem(0, parent);
+            for (auto k: i.second) {
+                QString item_string = (QFileInfo(k).isSymLink() ? "Symbolic: " : "") + k;
+                QTreeWidgetItem* item = new QTreeWidgetItem();
+                item->setText(0, item_string);
+                item->setFlags(item->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsSelectable);
+                item->setCheckState(0, Qt::Unchecked);
 
-                for (auto k: j) {
-                    QString item_string = (QFileInfo(k).isSymLink() ? "Symbolic: " : "") + k;
-                    QTreeWidgetItem* item = new QTreeWidgetItem();
-                    item->setText(0, item_string);
-                    item->setFlags(item->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsSelectable);
-                    item->setCheckState(0, Qt::Unchecked);
-
-                    parent->insertChild(0, item);
-                    connect(ui->rightTreeWidget, SIGNAL(itemChanged(QTreeWidgetItem*, int)),
-                        this, SLOT(file_remove_dispatcher(QTreeWidgetItem*)));
-                }
+                parent->insertChild(0, item);
+                connect(ui->rightTreeWidget, SIGNAL(itemChanged(QTreeWidgetItem*, int)),
+                    this, SLOT(file_remove_dispatcher(QTreeWidgetItem*)));
             }
         }
     }
+
     if (troubled.size() > 0) {
         file_trouble_message("reading", troubled);
     } else if (not_found) {

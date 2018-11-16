@@ -1,6 +1,8 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include "parameters.h"
+
 #include <QMainWindow>
 #include <QTreeWidget>
 #include <memory>
@@ -31,13 +33,13 @@ private slots:
 
 private:
     void add_directory(QString const& dir);
+    std::map<parameters, bool> get_parameters();
 
     void notification(const char* window_title, const char* message, int time);
     void file_trouble_message(const char* message, std::list<QString> const& troubled);
 
     QString get_hash(QString const& file_name);
 
-    std::list<QString> directories;
     std::set<std::pair<QString, QTreeWidgetItem*>> files_to_remove;
     std::unique_ptr<Ui::MainWindow> ui;
 };
