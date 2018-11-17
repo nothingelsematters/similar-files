@@ -29,8 +29,6 @@ private slots:
     void file_remove_dispatcher(QTreeWidgetItem* check_box);
     void remove_files();
 
-    void show_about_dialog();
-
 private:
     void add_directory(QString const& dir);
     std::map<parameters, bool> get_parameters();

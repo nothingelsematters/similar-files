@@ -71,15 +71,8 @@
     <addaction name="actionRemove_Directories_From_List"/>
     <addaction name="actionRemove_Files"/>
     <addaction name="separator"/>
-    <addaction name="actionInclude_Hidden_Files"/>
     <addaction name="separator"/>
     <addaction name="actionExit"/>
-   </widget>
-   <widget class="QMenu" name="menuHelp">
-    <property name="title">
-     <string>Help</string>
-    </property>
-    <addaction name="actionAbout"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuHelp"/>
@@ -144,19 +137,6 @@
   <action name="actionExit">
    <property name="text">
     <string>&amp;Exit</string>
-   </property>
-  </action>
-  <action name="actionAbout">
-   <property name="text">
-    <string>About</string>
-   </property>
-  </action>
-  <action name="actionInclude_Hidden_Files">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="text">
-    <string>Include Hidden Files</string>
    </property>
   </action>
  </widget>

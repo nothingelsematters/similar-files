@@ -26,17 +26,14 @@ main_window::main_window(QWidget *parent)
 
     QCommonStyle style;
     ui->actionAdd_Directory->setIcon(style.standardIcon(QCommonStyle::SP_DialogOpenButton));
-    ui->actionScan_Directory->setIcon(style.standardIcon(QCommonStyle::SP_DialogApplyButton));
     ui->actionRemove_Directories_From_List->setIcon(style.standardIcon(QCommonStyle::SP_DialogCloseButton));
     ui->actionRemove_Files->setIcon(style.standardIcon(QCommonStyle::SP_TrashIcon));
     ui->actionExit->setIcon(style.standardIcon(QCommonStyle::SP_DialogCloseButton));
-    ui->actionAbout->setIcon(style.standardIcon(QCommonStyle::SP_DialogHelpButton));
 
     connect(ui->actionAdd_Directory, &QAction::triggered, this, &main_window::select_directory);
     connect(ui->actionScan_Directory, &QAction::triggered, this, &main_window::scan_directories);
     connect(ui->actionRemove_Directories_From_List, &QAction::triggered, this, &main_window::remove_directories_from_list);
     connect(ui->actionRemove_Files, &QAction::triggered, this, &main_window::remove_files);
-    connect(ui->actionAbout, &QAction::triggered, this, &main_window::show_about_dialog);
     connect(ui->actionExit, &QAction::triggered, this, &QWidget::close);
 }
 
@@ -174,7 +171,7 @@ void main_window::scan_directories() {
             QString path = file_info.absoluteFilePath();
 
             if (file_info.isDir()) {
-                if (recursive) {
+                if (recursive && !file_info.isSymLink()) {
                     directories.push_back(path);
                 }
             } else {
@@ -271,8 +268,4 @@ void main_window::remove_files() {
         }
     }
 
-}
-
-void main_window::show_about_dialog() {
-    QMessageBox::aboutQt(this);
 }
