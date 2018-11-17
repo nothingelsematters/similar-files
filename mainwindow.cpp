@@ -22,7 +22,7 @@ main_window::main_window(QWidget *parent)
     setGeometry(QStyle::alignedRect(Qt::LeftToRight, Qt::AlignCenter, size(), qApp->desktop()->availableGeometry()));
 
     ui->leftTableWidget->horizontalHeader()->setStretchLastSection(true);
-    ui->rightTreeWidget->header()->setDefaultAlignment(Qt::AlignCenter);
+    ui->rightTreeWidget->header()->setSectionResizeMode(QHeaderView::ResizeToContents);
 
     QCommonStyle style;
     ui->actionAdd_Directory->setIcon(style.standardIcon(QCommonStyle::SP_DialogOpenButton));
@@ -137,6 +137,18 @@ QString main_window::get_hash(QString const& file_name) {
     return nullptr;
 }
 
+bool main_window::handle_getting_hash(QString file_name, std::list<QString>& troubled,
+    std::map<QString, std::list<QString>>& hashes) {
+
+    QString current_hash = get_hash(file_name);
+    if (current_hash == nullptr) {
+        troubled.push_back(file_name);
+        return false;
+    }
+    hashes[current_hash].push_back(file_name);
+    return true;
+}
+
 void main_window::scan_directories() {
     std::list<QString> directories;
     for (int i = 0; i < ui->leftTableWidget->rowCount(); ++i) {
@@ -150,7 +162,6 @@ void main_window::scan_directories() {
 
     files_to_remove.clear();
     ui->rightTreeWidget->clear();
-
     auto params = get_parameters();
     bool recursive = params[parameters::Recursive];
     std::map<QString, std::list<QString>> hashes;
@@ -184,12 +195,8 @@ void main_window::scan_directories() {
                 if (sizes.find(current_file.size()) == sizes.end()) {
                     sizes[current_file.size()] = {path, false};
                 } else {
-                    QString current_hash = get_hash(path);
-                    hashes[current_hash].push_back(path);
-
-                    if (!sizes[current_file.size()].second) {
-                        QString current_hash = get_hash(sizes[current_file.size()].first);
-                        hashes[current_hash].push_back(sizes[current_file.size()].first);
+                    if (handle_getting_hash(path, troubled, hashes) && !sizes[current_file.size()].second) {
+                        handle_getting_hash(sizes[current_file.size()].first, troubled, hashes);
                         sizes[current_file.size()].second = true;
                     }
                 }
@@ -204,13 +211,18 @@ void main_window::scan_directories() {
             not_found = false;
 
             QTreeWidgetItem* parent = new QTreeWidgetItem();
-            QString item_string = (QFileInfo(*(i.second.begin())).isSymLink() ? "Symbolic: " : "") +
-                (*i.second.begin()).splitRef("/").back();
+            QString item_string = (*i.second.begin());
+            if (QFileInfo(*(i.second.begin())).isSymLink()) {
+                item_string = "Symbolic: " + item_string;
+            }
             parent->setText(0, item_string);
             ui->rightTreeWidget->insertTopLevelItem(0, parent);
 
             for (auto k: i.second) {
-                QString item_string = (QFileInfo(k).isSymLink() ? "Symbolic: " : "") + k;
+                item_string = k;
+                if (QFileInfo(k).isSymLink()) {
+                    item_string = "Symbolic: " + item_string;
+                }
                 QTreeWidgetItem* item = new QTreeWidgetItem();
                 item->setText(0, item_string);
                 item->setFlags(item->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsSelectable);

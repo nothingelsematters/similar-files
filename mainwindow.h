@@ -37,6 +37,8 @@ private:
     void file_trouble_message(const char* message, std::list<QString> const& troubled);
 
     QString get_hash(QString const& file_name);
+    bool handle_getting_hash(QString file_name, std::list<QString>& troubled,
+        std::map<QString, std::list<QString>>& hashes);
 
     std::set<std::pair<QString, QTreeWidgetItem*>> files_to_remove;
     std::unique_ptr<Ui::MainWindow> ui;
