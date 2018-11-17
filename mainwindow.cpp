@@ -22,6 +22,7 @@ main_window::main_window(QWidget *parent)
     setGeometry(QStyle::alignedRect(Qt::LeftToRight, Qt::AlignCenter, size(), qApp->desktop()->availableGeometry()));
 
     ui->leftTableWidget->horizontalHeader()->setStretchLastSection(true);
+    ui->rightTreeWidget->header()->setDefaultAlignment(Qt::AlignCenter);
 
     QCommonStyle style;
     ui->actionAdd_Directory->setIcon(style.standardIcon(QCommonStyle::SP_DialogOpenButton));
@@ -151,7 +152,6 @@ void main_window::scan_directories() {
     }
 
     files_to_remove.clear();
-    ui->leftTableWidget->setRowCount(0);
     ui->rightTreeWidget->clear();
 
     auto params = get_parameters();
