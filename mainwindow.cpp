@@ -132,6 +132,8 @@ QString main_window::get_hash(QString const& file_name) {
         QCryptographicHash hasher(QCryptographicHash::Sha256);
         if (hasher.addData(&file)) {
             return QString(hasher.result().toHex());
+        } else {
+            return nullptr;
         }
     }
     return nullptr;
