@@ -187,6 +187,7 @@ std::pair<DirectoryScanner*, QThread*> MainWindow::new_dir_scanner() {
 void MainWindow::directories_scan() {
     ui->selectButton->setHidden(true);
     ui->filesList->clear();
+    files_to_remove.clear();
     auto [dir_scanner, worker_thread] = new_dir_scanner();
     connect(worker_thread, &QThread::started, dir_scanner, &DirectoryScanner::scan_directories);
     connect(dir_scanner, &DirectoryScanner::finished, this, &MainWindow::result_ready);
