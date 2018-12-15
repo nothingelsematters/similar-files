@@ -109,8 +109,7 @@ void MainWindow::add_directory(QString const& dir) {
 
         if (recursive && cur_dir.indexOf(dir + '/') == 0) {
             while (i < ui->directoriesTable->rowCount()) {
-                if (static_cast<QProgressBar*>(ui->directoriesTable->
-                       cellWidget(i, 0))->format().indexOf(dir) == 0) {
+                if (ui->directoriesTable->item(i, 0)->text().indexOf(dir) == 0) {
                     ui->directoriesTable->removeRow(i);
                 } else {
                     ++i;
