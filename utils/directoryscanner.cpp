@@ -56,7 +56,8 @@ void DirectoryScanner::scan_directories() {
             directory_size += size;
         }
         if (QThread::currentThread()->isInterruptionRequested()) {
-            break;
+            emit finished();
+            return;
         }
     }
 
@@ -74,7 +75,8 @@ void DirectoryScanner::scan_directories() {
             handle_file(j, hashes);
             emit progress((double) (current_size += QFileInfo(j).size()) * 100 / directory_size);
             if (QThread::currentThread()->isInterruptionRequested()) {
-                break;
+                emit finished();
+                return;
             }
         }
         for (auto j: hashes) {

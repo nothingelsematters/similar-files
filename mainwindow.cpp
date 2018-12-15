@@ -50,11 +50,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->selectButton, &QPushButton::clicked, this, &MainWindow::select_items);
 }
 
-MainWindow::~MainWindow() {
-//    delete preprocessing;
-//    for (auto i: ui->directoriesTable->children()) delete i;
-//    for (auto i: ui->stringsList->children()) delete i;
-}
+MainWindow::~MainWindow() {}
 
 std::map<parameters, bool> MainWindow::get_parameters() {
     std::map<parameters, bool> result;
@@ -184,6 +180,8 @@ std::pair<DirectoryScanner*, QThread*> MainWindow::new_dir_scanner() {
 }
 
 void MainWindow::directories_scan() {
+    disconnect(ui->filesList, &QTreeWidget::itemChanged,
+        this, &MainWindow::file_remove_dispatcher);
     ui->selectButton->setHidden(true);
     ui->filesList->clear();
     files_to_remove.clear();
@@ -207,6 +205,8 @@ void MainWindow::result_ready() {
     } else {
         ui->selectButton->setHidden(false);
         notification((std::to_string(count) + " matches found").c_str());
+        connect(ui->filesList, &QTreeWidget::itemChanged,
+            this, &MainWindow::file_remove_dispatcher);
     }
 }
 
@@ -218,8 +218,6 @@ void MainWindow::catch_match(std::list<QString> const& files) {
         QTreeWidgetItem* item = new QTreeWidgetItem(parent);
         item->setText(0, i);
         item->setCheckState(0, Qt::Unchecked);
-        connect(ui->filesList, &QTreeWidget::itemChanged,
-            this, &MainWindow::file_remove_dispatcher);
     }
 }
 
